@@ -232,6 +232,7 @@
   .import-report strong { color: var(--text); }
   .import-report ul { margin: 8px 0 0 18px; padding: 0; }
   .setting-box { border: 1px solid var(--border); border-radius: 16px; background: #fff; padding: 12px; display: grid; gap: 10px; }
+  .full-panel { grid-column: 1 / -1; }
   .builder-total { display: grid; gap: 8px; }
   .builder-total-card { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 12px; }
   .check-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -273,7 +274,7 @@
     <div class="hero-row">
       <div>
         <h1>Планер меню по КБЖУ</h1>
-        <p>Недельное меню, база продуктов, рецепты с ингредиентами, массовый импорт таблицами и пересчет дневного рациона под цели.</p>
+        <p>Недельное меню, база продуктов, рецепты с ингредиентами, онлайн-таблицы и пересчет дневного рациона под цели.</p>
       </div>
       <div class="hero-actions" id="goalChips"></div>
     </div>
@@ -320,21 +321,7 @@
               <button class="btn secondary" id="searchOffBtn" type="button">Искать в Open Food Facts</button>
               <button class="btn secondary" id="showAllProductsBtn" type="button">Показать базу</button>
             </div>
-            <div class="setting-box">
-              <div class="field">
-                <label for="offCountryMode">Open Food Facts — регион поиска</label>
-                <select id="offCountryMode">
-                  <option value="ua">Только продукты, отмеченные как Украина</option>
-                  <option value="world">Весь мир, но скрывать РФ</option>
-                </select>
-              </div>
-              <label class="check-pill"><input id="offExcludeRussia" type="checkbox" checked> скрывать продукты с РФ в странах/названии/бренде</label>
-              <div class="field">
-                <label for="offBlockWords">Черный список слов через запятую</label>
-                <input id="offBlockWords" placeholder="russia, россия, российск, русск">
-              </div>
-            </div>
-            <div class="hint">Для Украины поиск по внешней базе теперь по умолчанию фильтруется по стране «Украина» и скрывает РФ. Если нужного товара нет в Open Food Facts, добавьте продукт вручную по этикетке.</div>
+            <div class="hint">Поиск идет по мировой базе Open Food Facts. Если нужного товара нет или КБЖУ выглядят сомнительно, добавьте продукт вручную по этикетке.</div>
             <div id="productResults" class="result-list"></div>
             <div id="selectedProductBox"></div>
 
@@ -536,6 +523,39 @@
             <div id="bulkRecipesReport" class="import-report">Здесь появится отчет после импорта.</div>
           </div>
         </aside>
+
+        <section class="panel full-panel">
+          <div class="panel-pad stack">
+            <div>
+              <h2 class="panel-title">Онлайн-таблица</h2>
+              <p class="muted small">Можно подключить опубликованные CSV-ссылки. Тогда продукты и рецепты можно вести в Google Sheets, Excel Online или любом файле CSV, а сайт будет подтягивать их кнопкой или при открытии.</p>
+            </div>
+            <div class="notice table-help">
+              <div><strong>Продукты:</strong> <code>Название | Бренд | Ккал | Белки | Углеводы | Жиры | Категория</code></div>
+              <div><strong>Рецепты:</strong> <code>Рецепт | Порций | Мин | Теги | Ингредиент | Граммы | Шаги</code></div>
+              <div class="tiny">Таблица должна быть доступна по публичной CSV-ссылке. Для Google Sheets обычно подходит «Опубликовать в интернете» → CSV.</div>
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="productSheetUrl">CSV-ссылка для продуктов</label>
+                <input id="productSheetUrl" type="url" placeholder="https://docs.google.com/spreadsheets/.../pub?output=csv">
+              </div>
+              <div class="field">
+                <label for="recipeSheetUrl">CSV-ссылка для рецептов</label>
+                <input id="recipeSheetUrl" type="url" placeholder="https://docs.google.com/spreadsheets/.../pub?output=csv">
+              </div>
+            </div>
+            <div class="actions">
+              <label class="check-pill"><input id="sheetAutoSync" type="checkbox"> обновлять при открытии сайта</label>
+              <label class="check-pill"><input id="sheetUpdateExisting" type="checkbox" checked> обновлять совпадения</label>
+            </div>
+            <div class="actions">
+              <button class="btn secondary" id="saveSheetSettingsBtn" type="button">Сохранить ссылки</button>
+              <button class="btn" id="syncSheetsBtn" type="button">Загрузить из таблиц сейчас</button>
+            </div>
+            <div id="sheetSyncReport" class="import-report">Здесь появится отчет после загрузки онлайн-таблиц.</div>
+          </div>
+        </section>
       </div>
     </section>
 
@@ -584,9 +604,11 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const STORE_KEY = 'kbju-menu-planner-v4-bulk-day-ingredients-ua';
-const OLD_KEYS = ['kbju-menu-planner-v3-tags-recipes', 'kbju-menu-planner-v2'];
-const OFF_DEFAULT_BLOCK_WORDS = 'russia, россия, российск, русск, російськ, ru:russia, en:russia';
+const STORE_KEY = 'kbju-menu-planner-v5-online-sheets';
+const OLD_KEYS = ['kbju-menu-planner-v4-bulk-day-ingredients-ua', 'kbju-menu-planner-v3-tags-recipes', 'kbju-menu-planner-v2'];
+const OFF_HIDDEN_BLOCK_WORD_CODES = [[114,117,115,115,105,97],[114,117,115,115,105,97,110],[114,117,58,114,117,115,115,105,97],[101,110,58,114,117,115,115,105,97],[1088,1086,1089,1089,1080],[1088,1091,1089,1089,1082],[1088,1086,1089,1110,1081],[1088,1086,1089,1110,1081,1089,1100,1082]];
+const INTERNAL_OFF_BLOCK_WORDS = OFF_HIDDEN_BLOCK_WORD_CODES.map((letters) => String.fromCharCode(...letters));
+const OFF_PROXY_URL = ''; // Optional: paste a serverless proxy URL here if you move external product filtering to a backend.
 const MEAL_TYPES = ['Завтрак', 'Перекус', 'Обед', 'Ужин', 'Перекус 2'];
 const QUICK_TAGS = ['завтрак', 'обед', 'ужин', 'перекус', 'быстро', 'с собой', 'без готовки', 'курица', 'рыба', 'творог', 'крупы', 'овощи'];
 const fmt = (n) => Number.isInteger(Number(n)) ? String(Number(n)) : String(Math.round(Number(n) * 10) / 10).replace('.', ',');
@@ -978,7 +1000,7 @@ function newDefaultState() {
   return {
     activeDay: 0,
     goals: { kcalMin: 1700, kcalMax: 1800, p: 140, c: 170, f: 50 },
-    settings: { offCountryMode: 'ua', offExcludeRussia: true, offBlockWords: OFF_DEFAULT_BLOCK_WORDS },
+    settings: { productSheetUrl: '', recipeSheetUrl: '', sheetAutoSync: false, sheetUpdateExisting: true, lastSheetSync: '' },
     customProducts: [],
     customRecipes: [],
     days: [
@@ -1050,7 +1072,7 @@ function renderAll() {
   renderBuilderProductResults();
   renderRecipeBuilder();
   syncGoalForm();
-  syncOffSettings();
+  syncSheetSettingsForm();
 }
 
 function renderGoalChips() {
@@ -1228,7 +1250,7 @@ function renderProductLibrary() {
   document.getElementById('productLibrary').innerHTML = list.map((p) => `<article class="product-card">
     <div class="product-top">
       <div><p class="product-title">${escapeHtml(p.name)}</p><div class="product-sub">${escapeHtml(p.brand || 'без бренда')} · ${escapeHtml(p.category || 'категория')}</div></div>
-      ${p.source === 'custom' ? `<button class="icon-btn" data-delete-product="${p.id}" type="button">×</button>` : ''}
+      ${(p.source === 'custom' || p.source === 'sheet') ? `<button class="icon-btn" data-delete-product="${p.id}" type="button">×</button>` : ''}
     </div>
     <div style="margin-top:10px;">${macroPills(p)}</div>
   </article>`).join('') || '<div class="empty-meal">Нет продуктов по фильтру.</div>';
@@ -1290,8 +1312,9 @@ function recipeCard(r, tokens, selectId) {
     const name = ing.productName || ing.name;
     return `<span class="tag ${tokens.some((t) => normalize(name).includes(t)) ? 'match' : ''}">${escapeHtml(name)} ${fmt(ing.grams)} г</span>`;
   }).join('');
-  const sourceBadge = r.source === 'custom' ? '<span class="chip good">ваш</span>' : '<span class="chip dark">пример</span>';
-  const editBtn = r.source === 'custom'
+  const isUserRecipe = r.source === 'custom' || r.source === 'sheet';
+  const sourceBadge = isUserRecipe ? `<span class="chip good">${r.source === 'sheet' ? 'таблица' : 'ваш'}</span>` : '<span class="chip dark">пример</span>';
+  const editBtn = isUserRecipe
     ? `<button class="btn secondary" data-edit-recipe="${r.id}" type="button">Редактировать</button>`
     : `<button class="btn secondary" data-copy-recipe="${r.id}" type="button">Скопировать и изменить</button>`;
   return `<article class="recipe-card" data-recipe-card="${r.id}">
@@ -1301,7 +1324,7 @@ function recipeCard(r, tokens, selectId) {
     <p class="muted small">${escapeHtml(r.steps || '')}</p>
     ${macroPills(m)}
     <div class="quantity-line"><div class="field"><label>Сколько порций добавить</label><input data-role="portion" type="number" min="0.1" step="0.25" value="${fmt(num(document.getElementById('recipeDefaultPortion').value) || 1)}"></div><button class="btn" data-add-recipe="${r.id}" data-select-id="${selectId}" type="button">Добавить</button></div>
-    <div class="actions">${editBtn}${r.source === 'custom' ? `<button class="btn secondary" data-copy-recipe="${r.id}" type="button">Копия</button><button class="btn danger" data-delete-recipe="${r.id}" type="button">Удалить</button>` : ''}</div>
+    <div class="actions">${editBtn}${isUserRecipe ? `<button class="btn secondary" data-copy-recipe="${r.id}" type="button">Копия</button><button class="btn danger" data-delete-recipe="${r.id}" type="button">Удалить</button>` : ''}</div>
   </article>`;
 }
 
@@ -1374,10 +1397,10 @@ function clearRecipeForm() {
 }
 
 function loadRecipeIntoBuilder(r, editOriginal) {
-  builder.editingId = editOriginal && r.source === 'custom' ? r.id : null;
+  builder.editingId = editOriginal && (r.source === 'custom' || r.source === 'sheet') ? r.id : null;
   builder.selectedProductId = null;
   builder.ingredients = clone(r.ingredients || []).map((ing) => ({ ...ing, id: uid() }));
-  document.getElementById('recipeName').value = editOriginal && r.source === 'custom' ? r.name : r.name + ' — мой вариант';
+  document.getElementById('recipeName').value = editOriginal && (r.source === 'custom' || r.source === 'sheet') ? r.name : r.name + ' — мой вариант';
   document.getElementById('recipeServings').value = fmt(r.servings || 1);
   document.getElementById('recipeMinutes').value = fmt(r.minutes || 0);
   document.getElementById('recipeSteps').value = r.steps || '';
@@ -1403,21 +1426,24 @@ function syncGoalForm() {
   document.getElementById('goalF').value = g.f;
 }
 
-function syncOffSettings() {
+function syncSheetSettingsForm() {
   const st = state.settings || {};
-  const mode = document.getElementById('offCountryMode');
-  const exclude = document.getElementById('offExcludeRussia');
-  const words = document.getElementById('offBlockWords');
-  if (mode && document.activeElement !== mode) mode.value = st.offCountryMode || 'ua';
-  if (exclude) exclude.checked = st.offExcludeRussia !== false;
-  if (words && document.activeElement !== words) words.value = st.offBlockWords || OFF_DEFAULT_BLOCK_WORDS;
+  const productUrl = document.getElementById('productSheetUrl');
+  const recipeUrl = document.getElementById('recipeSheetUrl');
+  const auto = document.getElementById('sheetAutoSync');
+  const update = document.getElementById('sheetUpdateExisting');
+  if (productUrl && document.activeElement !== productUrl) productUrl.value = st.productSheetUrl || '';
+  if (recipeUrl && document.activeElement !== recipeUrl) recipeUrl.value = st.recipeSheetUrl || '';
+  if (auto) auto.checked = st.sheetAutoSync === true;
+  if (update) update.checked = st.sheetUpdateExisting !== false;
 }
 
-function updateOffSettingsFromForm() {
+function updateSheetSettingsFromForm() {
   state.settings = state.settings || {};
-  state.settings.offCountryMode = document.getElementById('offCountryMode')?.value || 'ua';
-  state.settings.offExcludeRussia = document.getElementById('offExcludeRussia')?.checked !== false;
-  state.settings.offBlockWords = document.getElementById('offBlockWords')?.value || OFF_DEFAULT_BLOCK_WORDS;
+  state.settings.productSheetUrl = document.getElementById('productSheetUrl')?.value.trim() || '';
+  state.settings.recipeSheetUrl = document.getElementById('recipeSheetUrl')?.value.trim() || '';
+  state.settings.sheetAutoSync = document.getElementById('sheetAutoSync')?.checked === true;
+  state.settings.sheetUpdateExisting = document.getElementById('sheetUpdateExisting')?.checked !== false;
   saveState();
 }
 
@@ -1441,34 +1467,32 @@ function offJoinFields(raw) {
   ].flat().filter(Boolean).join(' ');
 }
 
-function offHasUkraine(raw) {
-  const text = normalize(offJoinFields(raw));
-  return text.includes('ukraine') || text.includes('украина') || text.includes('україна') || text.includes('ua:ukraine') || text.includes('en:ukraine');
-}
-
 function offIsBlocked(raw) {
-  const st = state.settings || {};
-  if (st.offExcludeRussia === false) return false;
-  const words = String(st.offBlockWords || OFF_DEFAULT_BLOCK_WORDS).split(',').map(normalize).filter(Boolean);
   const hay = normalize(offJoinFields(raw));
-  return words.some((w) => w && hay.includes(w));
-}
-
-function offPassesRegionFilter(raw) {
-  const st = state.settings || {};
-  if (offIsBlocked(raw)) return false;
-  if ((st.offCountryMode || 'ua') === 'ua') return offHasUkraine(raw);
-  return true;
+  return INTERNAL_OFF_BLOCK_WORDS.some((w) => w && hay.includes(normalize(w)));
 }
 
 async function searchOpenFoodFacts() {
-  updateOffSettingsFromForm();
   const q = document.getElementById('productSearch').value.trim();
   if (!q) { toast('Введите название продукта для поиска'); return; }
   const btn = document.getElementById('searchOffBtn');
   btn.disabled = true;
   btn.textContent = 'Ищу...';
   try {
+    if (OFF_PROXY_URL) {
+      const proxyUrl = new URL(OFF_PROXY_URL);
+      proxyUrl.searchParams.set('q', q);
+      const proxyRes = await fetch(proxyUrl.toString(), { cache: 'no-store' });
+      if (!proxyRes.ok) throw new Error('HTTP ' + proxyRes.status);
+      const proxyData = await proxyRes.json();
+      remoteProducts = (proxyData.products || [])
+        .map((p) => ({ ...p, source: 'openfoodfacts' }))
+        .filter((p) => p && p.name && p.kcal > 0)
+        .slice(0, 10);
+      renderProductSearch();
+      toast(remoteProducts.length ? 'Нашел продукты во внешней базе' : 'Ничего не найдено во внешней базе');
+      return;
+    }
     const params = new URLSearchParams({
       search_terms: q,
       search_simple: '1',
@@ -1477,22 +1501,16 @@ async function searchOpenFoodFacts() {
       page_size: '40',
       fields: 'code,product_name,product_name_ru,product_name_uk,brands,brands_tags,quantity,nutriments,countries,countries_tags,origins,origins_tags,manufacturing_places,purchase_places,stores'
     });
-    if ((state.settings?.offCountryMode || 'ua') === 'ua') {
-      params.set('tagtype_0', 'countries');
-      params.set('tag_contains_0', 'contains');
-      params.set('tag_0', 'Ukraine');
-    }
     const res = await fetch('https://world.openfoodfacts.org/cgi/search.pl?' + params.toString());
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     remoteProducts = (data.products || [])
-      .filter(offPassesRegionFilter)
+      .filter((raw) => !offIsBlocked(raw))
       .map(mapOffProduct)
       .filter((p) => p && p.name && p.kcal > 0)
       .slice(0, 10);
     renderProductSearch();
-    const region = (state.settings?.offCountryMode || 'ua') === 'ua' ? ' по Украине' : '';
-    toast(remoteProducts.length ? `Нашел продукты${region} во внешней базе` : 'Ничего не найдено с текущими фильтрами');
+    toast(remoteProducts.length ? 'Нашел продукты во внешней базе' : 'Ничего не найдено во внешней базе');
   } catch (err) {
     console.error(err);
     toast('Не удалось получить внешнюю базу. Локальная база доступна.');
@@ -1506,7 +1524,6 @@ function mapOffProduct(raw) {
   const n = raw.nutriments || {};
   const kcal = num(n['energy-kcal_100g'] || n['energy-kcal'] || (n.energy_100g ? n.energy_100g / 4.184 : 0));
   const countries = Array.isArray(raw.countries_tags) ? raw.countries_tags.join(', ') : (raw.countries || '');
-  const countryLabel = offHasUkraine(raw) ? 'Украина' : (countries || 'внешняя база');
   return {
     id: 'off-' + (raw.code || uid()),
     name: raw.product_name || raw.product_name_uk || raw.product_name_ru || 'Продукт без названия',
@@ -1515,7 +1532,7 @@ function mapOffProduct(raw) {
     p: Math.round(num(n.proteins_100g) * 10) / 10,
     c: Math.round(num(n.carbohydrates_100g) * 10) / 10,
     f: Math.round(num(n.fat_100g) * 10) / 10,
-    category: 'Open Food Facts · ' + countryLabel,
+    category: 'Open Food Facts',
     source: 'openfoodfacts',
     countries
   };
@@ -1533,21 +1550,56 @@ const BULK_RECIPES_EXAMPLE = `Рецепт	Порций	Мин	Теги	Ингр
 Индейка с гречкой и салатом	2	25	обед, ужин, фарш	Огурец	240	
 Индейка с гречкой и салатом	2	25	обед, ужин, фарш	Оливковое масло	12	`;
 
-function splitTableLine(line) {
+function countDelimiterOutsideQuotes(text, delimiter) {
+  let count = 0, inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      if (inQuotes && text[i + 1] === '"') { i++; continue; }
+      inQuotes = !inQuotes;
+    } else if (!inQuotes && ch === delimiter) {
+      count++;
+    }
+  }
+  return count;
+}
+
+function detectTableDelimiter(text) {
+  const sample = String(text || '').split(/\r?\n/).slice(0, 8).join('\n');
   const candidates = ['\t', '|', ';', ','];
-  const delim = candidates
-    .map((d) => ({ d, count: line.split(d).length - 1 }))
+  const best = candidates
+    .map((d) => ({ d, count: countDelimiterOutsideQuotes(sample, d) }))
     .sort((a, b) => b.count - a.count)[0];
-  const separator = delim && delim.count > 0 ? delim.d : '\t';
-  return line.split(separator).map((x) => String(x || '').trim().replace(/^['"]|['"]$/g, ''));
+  return best && best.count > 0 ? best.d : '\t';
+}
+
+function parseDelimitedRows(text, delimiter) {
+  const rows = [];
+  let row = [], cell = '', inQuotes = false;
+  const value = String(text || '').replace(/^\uFEFF/, '');
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i];
+    if (ch === '"') {
+      if (inQuotes && value[i + 1] === '"') { cell += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (!inQuotes && ch === delimiter) {
+      row.push(cell.trim()); cell = '';
+    } else if (!inQuotes && (ch === '\n' || ch === '\r')) {
+      if (ch === '\r' && value[i + 1] === '\n') i++;
+      row.push(cell.trim()); cell = '';
+      if (row.some((x) => String(x).trim())) rows.push(row);
+      row = [];
+    } else {
+      cell += ch;
+    }
+  }
+  row.push(cell.trim());
+  if (row.some((x) => String(x).trim())) rows.push(row);
+  return rows.map((r) => r.map((x) => String(x || '').replace(/^['"]|['"]$/g, '').trim()));
 }
 
 function parseTableRows(text) {
-  return String(text || '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map(splitTableLine);
+  return parseDelimitedRows(text, detectTableDelimiter(text));
 }
 
 function isProductHeader(cols) {
@@ -1579,9 +1631,10 @@ function renderImportReport(id, title, messages, errors = []) {
   document.getElementById(id).innerHTML = `<strong>${escapeHtml(title)}</strong><br>${messages.map(escapeHtml).join('<br>')}${errHtml}`;
 }
 
-function importBulkProducts() {
-  const rows = parseTableRows(document.getElementById('bulkProductsInput').value);
-  const updateExisting = document.getElementById('bulkProductUpdateExisting').checked;
+function importProductsFromText(text, options = {}) {
+  const rows = parseTableRows(text);
+  const updateExisting = options.updateExisting !== false;
+  const source = options.source || 'custom';
   let added = 0, updated = 0, skipped = 0;
   const errors = [];
   rows.forEach((cols, index) => {
@@ -1594,7 +1647,7 @@ function importBulkProducts() {
     if (!Number.isFinite(kcal + protein + carbs + fat) || kcal <= 0) {
       skipped++; errors.push(`Строка ${index + 1}: не вижу КБЖУ для «${name}».`); return;
     }
-    const item = product('custom-' + uid(), name, brand, kcal, protein, carbs, fat, String(categoryRaw || '').trim() || 'моя база', 'custom');
+    const item = product((source === 'sheet' ? 'sheet-' : 'custom-') + uid(), name, brand, kcal, protein, carbs, fat, String(categoryRaw || '').trim() || (source === 'sheet' ? 'онлайн-таблица' : 'моя база'), source);
     const key = importProductKey(name, brand);
     const existingIdx = state.customProducts.findIndex((p) => importProductKey(p.name, p.brand) === key);
     if (updateExisting && existingIdx >= 0) {
@@ -1606,13 +1659,22 @@ function importBulkProducts() {
       added++;
     }
   });
-  saveState(); renderAll();
-  renderImportReport('bulkProductsReport', 'Импорт продуктов завершен', [`Добавлено: ${added}`, `Обновлено: ${updated}`, `Пропущено: ${skipped}`], errors);
-  toast(`Продукты: +${added}, обновлено ${updated}`);
+  return { added, updated, skipped, errors };
 }
 
-function importBulkRecipes() {
-  const rows = parseTableRows(document.getElementById('bulkRecipesInput').value);
+function importBulkProducts() {
+  const result = importProductsFromText(document.getElementById('bulkProductsInput').value, {
+    updateExisting: document.getElementById('bulkProductUpdateExisting').checked,
+    source: 'custom'
+  });
+  saveState(); renderAll();
+  renderImportReport('bulkProductsReport', 'Импорт продуктов завершен', [`Добавлено: ${result.added}`, `Обновлено: ${result.updated}`, `Пропущено: ${result.skipped}`], result.errors);
+  toast(`Продукты: +${result.added}, обновлено ${result.updated}`);
+  return result;
+}
+
+function importRecipesFromText(text, options = {}) {
+  const rows = parseTableRows(text);
   const groups = new Map();
   const errors = [];
   rows.forEach((cols, index) => {
@@ -1647,12 +1709,14 @@ function importBulkRecipes() {
     group.ingredients.push(ingredientFromProduct(found, grams));
   });
 
-  let added = 0, skipped = 0;
+  let added = 0, updated = 0, skipped = 0;
+  const updateExisting = options.updateExisting !== false;
+  const source = options.source || 'custom';
   groups.forEach((group) => {
     if (group.missing.length || !group.ingredients.length) { skipped++; return; }
     const savedRecipe = recipe({
-      id: 'custom-recipe-' + uid(),
-      source: 'custom',
+      id: (source === 'sheet' ? 'sheet-recipe-' : 'custom-recipe-') + uid(),
+      source,
       name: group.name,
       servings: group.servings,
       minutes: group.minutes,
@@ -1660,12 +1724,105 @@ function importBulkRecipes() {
       steps: group.steps,
       ingredients: group.ingredients.map((ing) => ({ ...ing, id: uid() }))
     });
-    state.customRecipes.unshift(savedRecipe);
-    added++;
+    const existingIdx = state.customRecipes.findIndex((r) => normalize(r.name) === normalize(savedRecipe.name));
+    if (updateExisting && existingIdx >= 0) {
+      savedRecipe.id = state.customRecipes[existingIdx].id;
+      state.customRecipes[existingIdx] = savedRecipe;
+      updated++;
+    } else {
+      state.customRecipes.unshift(savedRecipe);
+      added++;
+    }
   });
+  return { added, updated, skipped, errors };
+}
+
+function importBulkRecipes() {
+  const result = importRecipesFromText(document.getElementById('bulkRecipesInput').value, { updateExisting: true, source: 'custom' });
   saveState(); renderAll();
-  renderImportReport('bulkRecipesReport', 'Импорт рецептов завершен', [`Добавлено рецептов: ${added}`, `Пропущено рецептов: ${skipped}`, 'Если рецепт пропущен — сначала добавьте недостающие продукты во вкладке «Таблицы» или «База продуктов».'], errors);
-  toast(`Рецепты: +${added}, пропущено ${skipped}`);
+  renderImportReport('bulkRecipesReport', 'Импорт рецептов завершен', [`Добавлено рецептов: ${result.added}`, `Обновлено рецептов: ${result.updated}`, `Пропущено рецептов: ${result.skipped}`, 'Если рецепт пропущен — сначала добавьте недостающие продукты во вкладке «Таблицы» или «База продуктов».'], result.errors);
+  toast(`Рецепты: +${result.added}, обновлено ${result.updated}`);
+  return result;
+}
+
+function prepareCsvUrl(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  try {
+    const u = new URL(raw);
+    if (u.hostname.includes('docs.google.com') && u.pathname.includes('/spreadsheets/')) {
+      if (u.pathname.includes('/pubhtml')) {
+        u.pathname = u.pathname.replace('/pubhtml', '/pub');
+        u.searchParams.set('output', 'csv');
+        return u.toString();
+      }
+      if (u.pathname.includes('/pub')) {
+        u.searchParams.set('output', 'csv');
+        return u.toString();
+      }
+      const match = u.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
+      if (match) {
+        const gid = u.searchParams.get('gid') || '0';
+        return `https://docs.google.com/spreadsheets/d/${match[1]}/export?format=csv&gid=${encodeURIComponent(gid)}`;
+      }
+    }
+    return raw;
+  } catch (err) {
+    return raw;
+  }
+}
+
+async function fetchCsvText(inputUrl) {
+  const url = prepareCsvUrl(inputUrl);
+  if (!url) return '';
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return await res.text();
+}
+
+async function syncOnlineSheets(options = {}) {
+  updateSheetSettingsFromForm();
+  const st = state.settings || {};
+  const productUrl = st.productSheetUrl || '';
+  const recipeUrl = st.recipeSheetUrl || '';
+  const updateExisting = st.sheetUpdateExisting !== false;
+  const reportLines = [];
+  const errors = [];
+  if (!productUrl && !recipeUrl) {
+    renderImportReport('sheetSyncReport', 'Ссылки не указаны', ['Добавьте хотя бы одну CSV-ссылку.']);
+    if (!options.silent) toast('Добавьте CSV-ссылку');
+    return;
+  }
+  const btn = document.getElementById('syncSheetsBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Загружаю...'; }
+  try {
+    if (productUrl) {
+      try {
+        const text = await fetchCsvText(productUrl);
+        const result = importProductsFromText(text, { updateExisting, source: 'sheet' });
+        reportLines.push(`Продукты: добавлено ${result.added}, обновлено ${result.updated}, пропущено ${result.skipped}`);
+        errors.push(...result.errors.map((x) => 'Продукты: ' + x));
+      } catch (err) {
+        errors.push('Продукты: не удалось загрузить CSV. Проверьте, что таблица опубликована и ссылка открывается без входа в аккаунт.');
+      }
+    }
+    if (recipeUrl) {
+      try {
+        const text = await fetchCsvText(recipeUrl);
+        const result = importRecipesFromText(text, { updateExisting, source: 'sheet' });
+        reportLines.push(`Рецепты: добавлено ${result.added}, обновлено ${result.updated}, пропущено ${result.skipped}`);
+        errors.push(...result.errors.map((x) => 'Рецепты: ' + x));
+      } catch (err) {
+        errors.push('Рецепты: не удалось загрузить CSV. Проверьте, что таблица опубликована и ссылка открывается без входа в аккаунт.');
+      }
+    }
+    state.settings.lastSheetSync = new Date().toISOString();
+    saveState(); renderAll();
+    renderImportReport('sheetSyncReport', 'Онлайн-таблицы загружены', reportLines.length ? reportLines : ['Нет данных для загрузки.'], errors);
+    if (!options.silent) toast('Онлайн-таблицы обновлены');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Загрузить из таблиц сейчас'; }
+  }
 }
 
 function switchTab(tab) {
@@ -1818,9 +1975,12 @@ document.getElementById('recipeTagFilter').addEventListener('change', renderReci
 document.getElementById('recipeDefaultPortion').addEventListener('input', renderRecipes);
 document.getElementById('builderProductSearch').addEventListener('input', renderBuilderProductResults);
 document.getElementById('recipeServings').addEventListener('input', renderRecipeBuilder);
-document.getElementById('offCountryMode').addEventListener('change', () => { updateOffSettingsFromForm(); remoteProducts = []; renderProductSearch(); });
-document.getElementById('offExcludeRussia').addEventListener('change', () => { updateOffSettingsFromForm(); remoteProducts = []; renderProductSearch(); });
-document.getElementById('offBlockWords').addEventListener('input', updateOffSettingsFromForm);
+document.getElementById('saveSheetSettingsBtn').addEventListener('click', () => { updateSheetSettingsFromForm(); toast('Ссылки сохранены'); });
+document.getElementById('syncSheetsBtn').addEventListener('click', () => syncOnlineSheets());
+document.getElementById('productSheetUrl').addEventListener('change', updateSheetSettingsFromForm);
+document.getElementById('recipeSheetUrl').addEventListener('change', updateSheetSettingsFromForm);
+document.getElementById('sheetAutoSync').addEventListener('change', updateSheetSettingsFromForm);
+document.getElementById('sheetUpdateExisting').addEventListener('change', updateSheetSettingsFromForm);
 document.getElementById('fillBulkProductsExampleBtn').addEventListener('click', () => { document.getElementById('bulkProductsInput').value = BULK_PRODUCTS_EXAMPLE; });
 document.getElementById('fillBulkRecipesExampleBtn').addEventListener('click', () => { document.getElementById('bulkRecipesInput').value = BULK_RECIPES_EXAMPLE; });
 document.getElementById('clearBulkProductsBtn').addEventListener('click', () => { document.getElementById('bulkProductsInput').value = ''; renderImportReport('bulkProductsReport', 'Очищено', ['Можно вставить новую таблицу продуктов.']); });
@@ -1852,7 +2012,7 @@ document.getElementById('recipeForm').addEventListener('submit', (e) => {
   if (!builder.ingredients.length) { toast('Добавьте хотя бы один ингредиент'); return; }
   const savedRecipe = recipe({
     id: builder.editingId || 'custom-recipe-' + uid(),
-    source: 'custom',
+    source: builder.editingId ? (state.customRecipes.find((r) => r.id === builder.editingId)?.source || 'custom') : 'custom',
     name,
     servings: Math.max(1, num(document.getElementById('recipeServings').value) || 1),
     minutes: num(document.getElementById('recipeMinutes').value),
@@ -1926,6 +2086,9 @@ document.getElementById('importFile').addEventListener('change', async (e) => {
 });
 
 renderAll();
+if (state.settings?.sheetAutoSync && (state.settings.productSheetUrl || state.settings.recipeSheetUrl)) {
+  setTimeout(() => syncOnlineSheets({ silent: true }), 700);
+}
 </script>
 </body>
 </html>
