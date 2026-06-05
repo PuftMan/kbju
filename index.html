@@ -220,6 +220,18 @@
 
   .ingredient-row { display: grid; grid-template-columns: minmax(0, 1fr) 110px 38px; gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 14px; background: #fff; }
   .ingredient-row input { padding: 9px 10px; border-radius: 12px; }
+  .day-ingredient-editor { margin: 8px 0 10px; border: 1px solid var(--border); border-radius: 16px; background: rgba(247,245,240,0.62); overflow: hidden; }
+  .day-ingredient-editor summary { cursor: pointer; padding: 10px 12px; font-size: 12px; color: var(--text2); font-weight: 900; list-style-position: inside; }
+  .day-ingredient-editor .editor-body { display: grid; gap: 8px; padding: 0 10px 10px; }
+  .day-ingredient-row { display: grid; grid-template-columns: minmax(0,1fr) 112px; gap: 8px; align-items: center; padding: 9px; border: 1px solid var(--border); border-radius: 13px; background: #fff; }
+  .day-ingredient-row input { padding: 8px 10px; border-radius: 11px; }
+  .bulk-area { min-height: 210px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 1.45; white-space: pre; }
+  .table-help { display: grid; gap: 8px; }
+  .table-help code { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 2px 6px; color: var(--accent); }
+  .import-report { border: 1px solid var(--border); border-radius: 16px; padding: 12px; background: #fff; color: var(--text2); font-size: 13px; line-height: 1.5; max-height: 220px; overflow: auto; }
+  .import-report strong { color: var(--text); }
+  .import-report ul { margin: 8px 0 0 18px; padding: 0; }
+  .setting-box { border: 1px solid var(--border); border-radius: 16px; background: #fff; padding: 12px; display: grid; gap: 10px; }
   .builder-total { display: grid; gap: 8px; }
   .builder-total-card { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 12px; }
   .check-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -261,7 +273,7 @@
     <div class="hero-row">
       <div>
         <h1>Планер меню по КБЖУ</h1>
-        <p>Недельное меню, база продуктов, свои рецепты с ингредиентами, теги и пересчет дневного рациона под цели.</p>
+        <p>Недельное меню, база продуктов, рецепты с ингредиентами, массовый импорт таблицами и пересчет дневного рациона под цели.</p>
       </div>
       <div class="hero-actions" id="goalChips"></div>
     </div>
@@ -272,6 +284,7 @@
       <button class="tab-btn active" data-tab="planner">Планер</button>
       <button class="tab-btn" data-tab="products">База продуктов</button>
       <button class="tab-btn" data-tab="recipes">Рецепты</button>
+      <button class="tab-btn" data-tab="tables">Таблицы</button>
       <button class="tab-btn" data-tab="goals">Цели и данные</button>
     </nav>
   </div>
@@ -307,7 +320,21 @@
               <button class="btn secondary" id="searchOffBtn" type="button">Искать в Open Food Facts</button>
               <button class="btn secondary" id="showAllProductsBtn" type="button">Показать базу</button>
             </div>
-            <div class="hint">Если продукт конкретной фирмы не найден, добавьте его вручную по этикетке во вкладке «База продуктов».</div>
+            <div class="setting-box">
+              <div class="field">
+                <label for="offCountryMode">Open Food Facts — регион поиска</label>
+                <select id="offCountryMode">
+                  <option value="ua">Только продукты, отмеченные как Украина</option>
+                  <option value="world">Весь мир, но скрывать РФ</option>
+                </select>
+              </div>
+              <label class="check-pill"><input id="offExcludeRussia" type="checkbox" checked> скрывать продукты с РФ в странах/названии/бренде</label>
+              <div class="field">
+                <label for="offBlockWords">Черный список слов через запятую</label>
+                <input id="offBlockWords" placeholder="russia, россия, российск, русск">
+              </div>
+            </div>
+            <div class="hint">Для Украины поиск по внешней базе теперь по умолчанию фильтруется по стране «Украина» и скрывает РФ. Если нужного товара нет в Open Food Facts, добавьте продукт вручную по этикетке.</div>
             <div id="productResults" class="result-list"></div>
             <div id="selectedProductBox"></div>
 
@@ -467,6 +494,51 @@
       </div>
     </section>
 
+    <section id="tables" class="tab-panel">
+      <div class="planner-grid">
+        <section class="panel">
+          <div class="panel-pad stack">
+            <div>
+              <h2 class="panel-title">Массово добавить продукты</h2>
+              <p class="muted small">Можно вставить строки из Excel или Google Sheets. Разделитель: табуляция, точка с запятой, вертикальная черта или запятая.</p>
+            </div>
+            <div class="notice table-help">
+              <div><strong>Формат продуктов:</strong> <code>Название | Бренд | Ккал | Белки | Углеводы | Жиры | Категория</code></div>
+              <div class="tiny">Все КБЖУ — на 100 г или 100 мл. Если продукт уже есть в вашей базе с тем же названием и брендом, его можно обновить.</div>
+            </div>
+            <textarea id="bulkProductsInput" class="bulk-area" spellcheck="false" placeholder="Название | Бренд | Ккал | Белки | Углеводы | Жиры | Категория"></textarea>
+            <label class="check-pill" style="width:max-content;max-width:100%;"><input id="bulkProductUpdateExisting" type="checkbox" checked> обновлять совпадения в моей базе</label>
+            <div class="actions">
+              <button class="btn secondary" id="fillBulkProductsExampleBtn" type="button">Вставить пример</button>
+              <button class="btn" id="importBulkProductsBtn" type="button">Импортировать продукты</button>
+              <button class="btn secondary" id="clearBulkProductsBtn" type="button">Очистить</button>
+            </div>
+            <div id="bulkProductsReport" class="import-report">Здесь появится отчет после импорта.</div>
+          </div>
+        </section>
+
+        <aside class="panel sticky-side">
+          <div class="panel-pad stack">
+            <div>
+              <h2 class="panel-title">Массово добавить рецепты</h2>
+              <p class="muted small">Один ингредиент — одна строка. Название рецепта повторяется в каждой строке.</p>
+            </div>
+            <div class="notice table-help">
+              <div><strong>Формат рецептов:</strong> <code>Рецепт | Порций | Мин | Теги | Ингредиент | Граммы | Шаги</code></div>
+              <div class="tiny">Ингредиенты должны уже быть в базе продуктов. Если продукт не найден, рецепт с этой строкой не будет импортирован полностью.</div>
+            </div>
+            <textarea id="bulkRecipesInput" class="bulk-area" spellcheck="false" placeholder="Рецепт | Порций | Мин | Теги | Ингредиент | Граммы | Шаги"></textarea>
+            <div class="actions">
+              <button class="btn secondary" id="fillBulkRecipesExampleBtn" type="button">Вставить пример</button>
+              <button class="btn" id="importBulkRecipesBtn" type="button">Импортировать рецепты</button>
+              <button class="btn secondary" id="clearBulkRecipesBtn" type="button">Очистить</button>
+            </div>
+            <div id="bulkRecipesReport" class="import-report">Здесь появится отчет после импорта.</div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
     <section id="goals" class="tab-panel">
       <div class="planner-grid">
         <section class="panel">
@@ -512,8 +584,9 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const STORE_KEY = 'kbju-menu-planner-v3-tags-recipes';
-const OLD_KEYS = ['kbju-menu-planner-v2'];
+const STORE_KEY = 'kbju-menu-planner-v4-bulk-day-ingredients-ua';
+const OLD_KEYS = ['kbju-menu-planner-v3-tags-recipes', 'kbju-menu-planner-v2'];
+const OFF_DEFAULT_BLOCK_WORDS = 'russia, россия, российск, русск, російськ, ru:russia, en:russia';
 const MEAL_TYPES = ['Завтрак', 'Перекус', 'Обед', 'Ужин', 'Перекус 2'];
 const QUICK_TAGS = ['завтрак', 'обед', 'ужин', 'перекус', 'быстро', 'с собой', 'без готовки', 'курица', 'рыба', 'творог', 'крупы', 'овощи'];
 const fmt = (n) => Number.isInteger(Number(n)) ? String(Number(n)) : String(Math.round(Number(n) * 10) / 10).replace('.', ',');
@@ -748,10 +821,54 @@ function recipeMacros(r) {
   };
 }
 
+function cloneIngredientForEntry(ing) {
+  return {
+    id: uid(),
+    productId: ing.productId || '',
+    productName: ing.productName || ing.name || 'Ингредиент',
+    name: ing.productName || ing.name || 'Ингредиент',
+    brand: ing.brand || '',
+    grams: num(ing.grams),
+    per100: { kcal: num(ing.per100?.kcal), p: num(ing.per100?.p), c: num(ing.per100?.c), f: num(ing.per100?.f) }
+  };
+}
+
+function makeDayIngredientsFromRecipeIngredients(recipeIngredients, servings, portion) {
+  const s = Math.max(1, num(servings) || 1);
+  const n = Math.max(0.1, num(portion) || 1);
+  return (recipeIngredients || []).map((ing) => ({
+    id: uid(),
+    productId: ing.productId || '',
+    productName: ing.productName || ing.name || 'Ингредиент',
+    name: ing.productName || ing.name || 'Ингредиент',
+    brand: ing.brand || '',
+    grams: Math.round((num(ing.grams) / s) * n * 10) / 10,
+    per100: { kcal: num(ing.per100?.kcal), p: num(ing.per100?.p), c: num(ing.per100?.c), f: num(ing.per100?.f) }
+  }));
+}
+
+function recalcRecipeEntry(e) {
+  if (!Array.isArray(e.dayIngredients)) e.dayIngredients = [];
+  const t = e.dayIngredients.reduce((a, ing) => {
+    const m = scaledPer100(ing.per100 || {}, ing.grams);
+    a.kcal += m.kcal; a.p += m.p; a.c += m.c; a.f += m.f;
+    return a;
+  }, { kcal: 0, p: 0, c: 0, f: 0 });
+  e.kcal = Math.round(t.kcal * 10) / 10;
+  e.p = Math.round(t.p * 10) / 10;
+  e.c = Math.round(t.c * 10) / 10;
+  e.f = Math.round(t.f * 10) / 10;
+  e.ingredients = e.dayIngredients.map((ing) => ({ name: ing.productName || ing.name, grams: num(ing.grams) }));
+  const customMark = e.customized ? ' · ингредиенты изменены' : '';
+  e.desc = `${fmt(e.portion || 1)} порц. · ${e.source || 'рецепт'}${customMark}`;
+  return e;
+}
+
 function makeEntryFromRecipe(r, type, portion = 1, source = 'рецепт') {
   const base = recipeMacros(r);
   const servings = Math.max(1, num(r.servings) || 1);
   const portionNum = Math.max(0.1, num(portion) || 1);
+  const recipeBaseIngredients = clone(r.ingredients || []).map(cloneIngredientForEntry);
   const entry = {
     id: uid(),
     kind: 'recipe',
@@ -763,35 +880,57 @@ function makeEntryFromRecipe(r, type, portion = 1, source = 'рецепт') {
     baseMacros: base,
     sourceRecipeId: r.id,
     recipeSource: r.source || 'base',
-    ingredients: (r.ingredients || []).map((ing) => ({
-      name: ing.productName || ing.name,
-      grams: Math.round((num(ing.grams) / servings) * portionNum * 10) / 10
-    })),
-    recipeIngredients: clone(r.ingredients || []),
+    recipeBaseIngredients,
+    recipeIngredients: clone(recipeBaseIngredients),
+    dayIngredients: makeDayIngredientsFromRecipeIngredients(recipeBaseIngredients, servings, portionNum),
     recipeServings: servings,
     tags: clone(r.tags || []),
-    source
+    source,
+    customized: false
   };
-  return updateRecipeEntry(entry, portionNum);
+  return recalcRecipeEntry(entry);
 }
 
-function updateRecipeEntry(e, portion) {
-  const n = Math.max(0.1, num(portion) || 1);
-  const b = e.baseMacros || { kcal: e.kcal || 0, p: e.p || 0, c: e.c || 0, f: e.f || 0 };
-  e.portion = n;
-  e.kcal = Math.round(num(b.kcal) * n * 10) / 10;
-  e.p = Math.round(num(b.p) * n * 10) / 10;
-  e.c = Math.round(num(b.c) * n * 10) / 10;
-  e.f = Math.round(num(b.f) * n * 10) / 10;
+function normalizeRecipeEntryStructure(e) {
+  if (!e || e.kind !== 'recipe') return e;
   const servings = Math.max(1, num(e.recipeServings) || 1);
-  if (Array.isArray(e.recipeIngredients)) {
-    e.ingredients = e.recipeIngredients.map((ing) => ({
-      name: ing.productName || ing.name,
-      grams: Math.round((num(ing.grams) / servings) * n * 10) / 10
+  const portion = Math.max(0.1, num(e.portion) || 1);
+  if (!Array.isArray(e.recipeBaseIngredients) && Array.isArray(e.recipeIngredients)) {
+    e.recipeBaseIngredients = clone(e.recipeIngredients).map(cloneIngredientForEntry);
+  }
+  if (!Array.isArray(e.recipeBaseIngredients)) e.recipeBaseIngredients = [];
+  if (!Array.isArray(e.dayIngredients) || !e.dayIngredients.length) {
+    e.dayIngredients = makeDayIngredientsFromRecipeIngredients(e.recipeBaseIngredients, servings, portion);
+  } else {
+    e.dayIngredients = e.dayIngredients.map((ing) => ({
+      id: ing.id || uid(),
+      productId: ing.productId || '',
+      productName: ing.productName || ing.name || 'Ингредиент',
+      name: ing.productName || ing.name || 'Ингредиент',
+      brand: ing.brand || '',
+      grams: num(ing.grams),
+      per100: { kcal: num(ing.per100?.kcal), p: num(ing.per100?.p), c: num(ing.per100?.c), f: num(ing.per100?.f) }
     }));
   }
-  e.desc = `${fmt(n)} порц. · ${e.source || 'рецепт'}`;
-  return e;
+  return recalcRecipeEntry(e);
+}
+
+function updateRecipeEntry(e, portion, resetIngredients = true) {
+  const n = Math.max(0.1, num(portion) || 1);
+  e.portion = n;
+  if (resetIngredients) {
+    const base = Array.isArray(e.recipeBaseIngredients) ? e.recipeBaseIngredients : (e.recipeIngredients || []);
+    e.dayIngredients = makeDayIngredientsFromRecipeIngredients(base, e.recipeServings, n);
+    e.customized = false;
+  }
+  return recalcRecipeEntry(e);
+}
+
+function resetEntryIngredients(e) {
+  if (!e || e.kind !== 'recipe') return e;
+  e.customized = false;
+  e.dayIngredients = makeDayIngredientsFromRecipeIngredients(e.recipeBaseIngredients || e.recipeIngredients || [], e.recipeServings, e.portion || 1);
+  return recalcRecipeEntry(e);
 }
 
 function makeEntryFromProduct(p, type, grams) {
@@ -839,6 +978,7 @@ function newDefaultState() {
   return {
     activeDay: 0,
     goals: { kcalMin: 1700, kcalMax: 1800, p: 140, c: 170, f: 50 },
+    settings: { offCountryMode: 'ua', offExcludeRussia: true, offBlockWords: OFF_DEFAULT_BLOCK_WORDS },
     customProducts: [],
     customRecipes: [],
     days: [
@@ -856,13 +996,21 @@ function newDefaultState() {
 function hydrateState(parsed) {
   const d = newDefaultState();
   const safe = parsed && typeof parsed === 'object' ? parsed : {};
-  return {
+  const hydrated = {
     activeDay: Number.isFinite(Number(safe.activeDay)) ? Number(safe.activeDay) : d.activeDay,
     goals: { ...d.goals, ...(safe.goals || {}) },
+    settings: { ...d.settings, ...(safe.settings || {}) },
     customProducts: Array.isArray(safe.customProducts) ? safe.customProducts : [],
     customRecipes: Array.isArray(safe.customRecipes) ? safe.customRecipes : [],
     days: Array.isArray(safe.days) && safe.days.length ? safe.days : d.days
   };
+  hydrated.days = hydrated.days.map((day, i) => ({
+    label: day.label || d.days[i]?.label || '',
+    full: day.full || d.days[i]?.full || day.label || '',
+    entries: Array.isArray(day.entries) ? day.entries.map(normalizeRecipeEntryStructure) : []
+  }));
+  hydrated.activeDay = Math.min(Math.max(0, hydrated.activeDay), hydrated.days.length - 1);
+  return hydrated;
 }
 
 function loadState() {
@@ -902,6 +1050,7 @@ function renderAll() {
   renderBuilderProductResults();
   renderRecipeBuilder();
   syncGoalForm();
+  syncOffSettings();
 }
 
 function renderGoalChips() {
@@ -998,10 +1147,18 @@ function entryCard(e) {
   const ingredients = (e.ingredients || []).slice(0, 8).map((x) => `<span class="tag">${escapeHtml(x.name)} ${x.grams ? fmt(x.grams) + ' г' : ''}</span>`).join('');
   const tags = (e.tags || []).slice(0, 6).map((t) => `<span class="tag recipe-tag">${escapeHtml(t)}</span>`).join('');
   const adjust = e.kind === 'recipe'
-    ? `<div class="entry-adjust"><div class="field"><label>Порция этого рецепта</label><input data-entry-portion="${e.id}" type="number" min="0.1" step="0.25" value="${fmt(e.portion || 1)}"></div><div class="hint tiny">меняет только этот день</div></div>`
+    ? `<div class="entry-adjust"><div class="field"><label>Порция этого рецепта</label><input data-entry-portion="${e.id}" type="number" min="0.1" step="0.25" value="${fmt(e.portion || 1)}"></div><div class="hint tiny">масштабирует все ингредиенты этого дня</div></div>`
     : (e.kind === 'product'
       ? `<div class="entry-adjust"><div class="field"><label>Граммы продукта</label><input data-entry-grams="${e.id}" type="number" min="1" step="1" value="${fmt(e.grams || 100)}"></div><div class="hint tiny">пересчет сразу</div></div>`
       : '');
+  const dayIngredientEditor = e.kind === 'recipe' ? `<details class="day-ingredient-editor">
+    <summary>Изменить ингредиенты только для этого дня</summary>
+    <div class="editor-body">
+      <div class="hint tiny">Например, сегодня фарша вышло 185 г вместо 160 г. Это не меняет рецепт в базе.</div>
+      ${(e.dayIngredients || []).map((ing) => `<div class="day-ingredient-row"><div><strong>${escapeHtml(ing.productName || ing.name)}</strong><div class="muted tiny">${escapeHtml(ing.brand || '')}</div></div><input data-entry-ing-grams="${e.id}" data-ing-id="${ing.id}" type="number" min="0" step="1" value="${fmt(ing.grams)}"></div>`).join('')}
+      <button class="btn secondary" data-reset-entry-ingredients="${e.id}" type="button">Сбросить ингредиенты к порции</button>
+    </div>
+  </details>` : '';
   return `<article class="entry-card">
     <div class="entry-head">
       <div>
@@ -1011,6 +1168,7 @@ function entryCard(e) {
       <div class="entry-actions"><button class="icon-btn" data-delete-entry="${e.id}" type="button" aria-label="Удалить">×</button></div>
     </div>
     ${adjust}
+    ${dayIngredientEditor}
     <div class="ingredient-tags">${ingredients}</div>
     ${tags ? `<div class="ingredient-tags" style="margin-top:6px;">${tags}</div>` : ''}
     <div style="margin-top:10px;">${macroPills(e)}</div>
@@ -1245,6 +1403,24 @@ function syncGoalForm() {
   document.getElementById('goalF').value = g.f;
 }
 
+function syncOffSettings() {
+  const st = state.settings || {};
+  const mode = document.getElementById('offCountryMode');
+  const exclude = document.getElementById('offExcludeRussia');
+  const words = document.getElementById('offBlockWords');
+  if (mode && document.activeElement !== mode) mode.value = st.offCountryMode || 'ua';
+  if (exclude) exclude.checked = st.offExcludeRussia !== false;
+  if (words && document.activeElement !== words) words.value = st.offBlockWords || OFF_DEFAULT_BLOCK_WORDS;
+}
+
+function updateOffSettingsFromForm() {
+  state.settings = state.settings || {};
+  state.settings.offCountryMode = document.getElementById('offCountryMode')?.value || 'ua';
+  state.settings.offExcludeRussia = document.getElementById('offExcludeRussia')?.checked !== false;
+  state.settings.offBlockWords = document.getElementById('offBlockWords')?.value || OFF_DEFAULT_BLOCK_WORDS;
+  saveState();
+}
+
 function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>'"]/g, (ch) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[ch]));
 }
@@ -1257,20 +1433,66 @@ function toast(message) {
   window.toastTimer = setTimeout(() => el.classList.remove('show'), 2300);
 }
 
+function offJoinFields(raw) {
+  return [
+    raw.product_name, raw.product_name_ru, raw.product_name_uk, raw.generic_name,
+    raw.brands, raw.brands_tags, raw.countries, raw.countries_tags,
+    raw.origins, raw.origins_tags, raw.manufacturing_places, raw.purchase_places, raw.stores
+  ].flat().filter(Boolean).join(' ');
+}
+
+function offHasUkraine(raw) {
+  const text = normalize(offJoinFields(raw));
+  return text.includes('ukraine') || text.includes('украина') || text.includes('україна') || text.includes('ua:ukraine') || text.includes('en:ukraine');
+}
+
+function offIsBlocked(raw) {
+  const st = state.settings || {};
+  if (st.offExcludeRussia === false) return false;
+  const words = String(st.offBlockWords || OFF_DEFAULT_BLOCK_WORDS).split(',').map(normalize).filter(Boolean);
+  const hay = normalize(offJoinFields(raw));
+  return words.some((w) => w && hay.includes(w));
+}
+
+function offPassesRegionFilter(raw) {
+  const st = state.settings || {};
+  if (offIsBlocked(raw)) return false;
+  if ((st.offCountryMode || 'ua') === 'ua') return offHasUkraine(raw);
+  return true;
+}
+
 async function searchOpenFoodFacts() {
+  updateOffSettingsFromForm();
   const q = document.getElementById('productSearch').value.trim();
   if (!q) { toast('Введите название продукта для поиска'); return; }
   const btn = document.getElementById('searchOffBtn');
   btn.disabled = true;
   btn.textContent = 'Ищу...';
   try {
-    const params = new URLSearchParams({ search_terms: q, search_simple: '1', action: 'process', json: '1', page_size: '8', fields: 'code,product_name,brands,quantity,nutriments' });
+    const params = new URLSearchParams({
+      search_terms: q,
+      search_simple: '1',
+      action: 'process',
+      json: '1',
+      page_size: '40',
+      fields: 'code,product_name,product_name_ru,product_name_uk,brands,brands_tags,quantity,nutriments,countries,countries_tags,origins,origins_tags,manufacturing_places,purchase_places,stores'
+    });
+    if ((state.settings?.offCountryMode || 'ua') === 'ua') {
+      params.set('tagtype_0', 'countries');
+      params.set('tag_contains_0', 'contains');
+      params.set('tag_0', 'Ukraine');
+    }
     const res = await fetch('https://world.openfoodfacts.org/cgi/search.pl?' + params.toString());
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    remoteProducts = (data.products || []).map(mapOffProduct).filter((p) => p && p.name && p.kcal > 0);
+    remoteProducts = (data.products || [])
+      .filter(offPassesRegionFilter)
+      .map(mapOffProduct)
+      .filter((p) => p && p.name && p.kcal > 0)
+      .slice(0, 10);
     renderProductSearch();
-    toast(remoteProducts.length ? 'Нашел продукты во внешней базе' : 'Во внешней базе ничего не найдено');
+    const region = (state.settings?.offCountryMode || 'ua') === 'ua' ? ' по Украине' : '';
+    toast(remoteProducts.length ? `Нашел продукты${region} во внешней базе` : 'Ничего не найдено с текущими фильтрами');
   } catch (err) {
     console.error(err);
     toast('Не удалось получить внешнюю базу. Локальная база доступна.');
@@ -1282,18 +1504,168 @@ async function searchOpenFoodFacts() {
 
 function mapOffProduct(raw) {
   const n = raw.nutriments || {};
-  const kcal = num(n['energy-kcal_100g'] || (n.energy_100g ? n.energy_100g / 4.184 : 0));
+  const kcal = num(n['energy-kcal_100g'] || n['energy-kcal'] || (n.energy_100g ? n.energy_100g / 4.184 : 0));
+  const countries = Array.isArray(raw.countries_tags) ? raw.countries_tags.join(', ') : (raw.countries || '');
+  const countryLabel = offHasUkraine(raw) ? 'Украина' : (countries || 'внешняя база');
   return {
     id: 'off-' + (raw.code || uid()),
-    name: raw.product_name || 'Продукт без названия',
+    name: raw.product_name || raw.product_name_uk || raw.product_name_ru || 'Продукт без названия',
     brand: [raw.brands, raw.quantity].filter(Boolean).join(' · '),
     kcal: Math.round(kcal * 10) / 10,
     p: Math.round(num(n.proteins_100g) * 10) / 10,
     c: Math.round(num(n.carbohydrates_100g) * 10) / 10,
     f: Math.round(num(n.fat_100g) * 10) / 10,
-    category: 'Open Food Facts',
-    source: 'openfoodfacts'
+    category: 'Open Food Facts · ' + countryLabel,
+    source: 'openfoodfacts',
+    countries
   };
+}
+
+const BULK_PRODUCTS_EXAMPLE = `Название	Бренд	Ккал	Белки	Углеводы	Жиры	Категория
+Йогурт греческий 2%	Молокія	74	9	3.5	2	молочка
+Сыр кисломолочный 5%	Яготинське	121	17	3	5	молочка
+Фарш куриный	локальный магазин	143	19	0	7	мясо`;
+
+const BULK_RECIPES_EXAMPLE = `Рецепт	Порций	Мин	Теги	Ингредиент	Граммы	Шаги
+Индейка с гречкой и салатом	2	25	обед, ужин, фарш	Фарш индейки	320	Обжарить фарш, подать с гречкой и овощами.
+Индейка с гречкой и салатом	2	25	обед, ужин, фарш	Гречка вареная	440	
+Индейка с гречкой и салатом	2	25	обед, ужин, фарш	Помидор	240	
+Индейка с гречкой и салатом	2	25	обед, ужин, фарш	Огурец	240	
+Индейка с гречкой и салатом	2	25	обед, ужин, фарш	Оливковое масло	12	`;
+
+function splitTableLine(line) {
+  const candidates = ['\t', '|', ';', ','];
+  const delim = candidates
+    .map((d) => ({ d, count: line.split(d).length - 1 }))
+    .sort((a, b) => b.count - a.count)[0];
+  const separator = delim && delim.count > 0 ? delim.d : '\t';
+  return line.split(separator).map((x) => String(x || '').trim().replace(/^['"]|['"]$/g, ''));
+}
+
+function parseTableRows(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map(splitTableLine);
+}
+
+function isProductHeader(cols) {
+  const h = normalize(cols.join(' '));
+  return h.includes('название') && (h.includes('ккал') || h.includes('калории'));
+}
+
+function isRecipeHeader(cols) {
+  const h = normalize(cols.join(' '));
+  return (h.includes('рецепт') || h.includes('название')) && h.includes('ингредиент');
+}
+
+function importProductKey(name, brand) {
+  return normalize(`${name}|${brand || 'ваш продукт'}`);
+}
+
+function findProductForImport(name) {
+  const q = normalize(name);
+  if (!q) return null;
+  const products = allProducts();
+  return products.find((p) => normalize(p.name) === q)
+    || products.find((p) => normalize(`${p.name} ${p.brand || ''}`) === q)
+    || products.find((p) => normalize(p.name).includes(q))
+    || products.find((p) => q.includes(normalize(p.name)));
+}
+
+function renderImportReport(id, title, messages, errors = []) {
+  const errHtml = errors.length ? `<ul>${errors.slice(0, 18).map((x) => `<li>${escapeHtml(x)}</li>`).join('')}${errors.length > 18 ? `<li>Еще ошибок: ${errors.length - 18}</li>` : ''}</ul>` : '';
+  document.getElementById(id).innerHTML = `<strong>${escapeHtml(title)}</strong><br>${messages.map(escapeHtml).join('<br>')}${errHtml}`;
+}
+
+function importBulkProducts() {
+  const rows = parseTableRows(document.getElementById('bulkProductsInput').value);
+  const updateExisting = document.getElementById('bulkProductUpdateExisting').checked;
+  let added = 0, updated = 0, skipped = 0;
+  const errors = [];
+  rows.forEach((cols, index) => {
+    if (isProductHeader(cols)) return;
+    const [nameRaw, brandRaw, kcalRaw, pRaw, cRaw, fRaw, categoryRaw] = cols;
+    const name = String(nameRaw || '').trim();
+    const brand = String(brandRaw || '').trim() || 'ваш продукт';
+    const kcal = num(kcalRaw), protein = num(pRaw), carbs = num(cRaw), fat = num(fRaw);
+    if (!name) { skipped++; return; }
+    if (!Number.isFinite(kcal + protein + carbs + fat) || kcal <= 0) {
+      skipped++; errors.push(`Строка ${index + 1}: не вижу КБЖУ для «${name}».`); return;
+    }
+    const item = product('custom-' + uid(), name, brand, kcal, protein, carbs, fat, String(categoryRaw || '').trim() || 'моя база', 'custom');
+    const key = importProductKey(name, brand);
+    const existingIdx = state.customProducts.findIndex((p) => importProductKey(p.name, p.brand) === key);
+    if (updateExisting && existingIdx >= 0) {
+      item.id = state.customProducts[existingIdx].id;
+      state.customProducts[existingIdx] = item;
+      updated++;
+    } else {
+      state.customProducts.unshift(item);
+      added++;
+    }
+  });
+  saveState(); renderAll();
+  renderImportReport('bulkProductsReport', 'Импорт продуктов завершен', [`Добавлено: ${added}`, `Обновлено: ${updated}`, `Пропущено: ${skipped}`], errors);
+  toast(`Продукты: +${added}, обновлено ${updated}`);
+}
+
+function importBulkRecipes() {
+  const rows = parseTableRows(document.getElementById('bulkRecipesInput').value);
+  const groups = new Map();
+  const errors = [];
+  rows.forEach((cols, index) => {
+    if (isRecipeHeader(cols)) return;
+    const [recipeNameRaw, servingsRaw, minutesRaw, tagsRaw, ingredientRaw, gramsRaw, stepsRaw] = cols;
+    const recipeName = String(recipeNameRaw || '').trim();
+    const ingredientName = String(ingredientRaw || '').trim();
+    const grams = num(gramsRaw);
+    if (!recipeName && !ingredientName) return;
+    if (!recipeName || !ingredientName || grams <= 0) {
+      errors.push(`Строка ${index + 1}: нужны рецепт, ингредиент и граммы.`); return;
+    }
+    if (!groups.has(recipeName)) {
+      groups.set(recipeName, {
+        name: recipeName,
+        servings: Math.max(1, num(servingsRaw) || 1),
+        minutes: num(minutesRaw),
+        tags: String(tagsRaw || '').split(/[,;]/).map(normalize).filter(Boolean),
+        steps: String(stepsRaw || '').trim(),
+        ingredients: [],
+        missing: []
+      });
+    }
+    const group = groups.get(recipeName);
+    if (!group.steps && stepsRaw) group.steps = String(stepsRaw).trim();
+    const found = findProductForImport(ingredientName);
+    if (!found) {
+      group.missing.push(ingredientName);
+      errors.push(`Строка ${index + 1}: продукт «${ingredientName}» не найден в базе.`);
+      return;
+    }
+    group.ingredients.push(ingredientFromProduct(found, grams));
+  });
+
+  let added = 0, skipped = 0;
+  groups.forEach((group) => {
+    if (group.missing.length || !group.ingredients.length) { skipped++; return; }
+    const savedRecipe = recipe({
+      id: 'custom-recipe-' + uid(),
+      source: 'custom',
+      name: group.name,
+      servings: group.servings,
+      minutes: group.minutes,
+      tags: group.tags,
+      steps: group.steps,
+      ingredients: group.ingredients.map((ing) => ({ ...ing, id: uid() }))
+    });
+    state.customRecipes.unshift(savedRecipe);
+    added++;
+  });
+  saveState(); renderAll();
+  renderImportReport('bulkRecipesReport', 'Импорт рецептов завершен', [`Добавлено рецептов: ${added}`, `Пропущено рецептов: ${skipped}`, 'Если рецепт пропущен — сначала добавьте недостающие продукты во вкладке «Таблицы» или «База продуктов».'], errors);
+  toast(`Рецепты: +${added}, пропущено ${skipped}`);
 }
 
 function switchTab(tab) {
@@ -1325,6 +1697,15 @@ document.body.addEventListener('click', (e) => {
     const day = state.days[state.activeDay];
     day.entries = day.entries.filter((x) => x.id !== id);
     saveState(); renderAll(); toast('Удалено из дня'); return;
+  }
+
+  const resetIngredients = e.target.closest('[data-reset-entry-ingredients]');
+  if (resetIngredients) {
+    const day = state.days[state.activeDay];
+    const entry = day.entries.find((x) => x.id === resetIngredients.dataset.resetEntryIngredients);
+    if (!entry) return;
+    resetEntryIngredients(entry);
+    saveState(); renderAll(); toast('Ингредиенты сброшены к порции'); return;
   }
 
   const productBtn = e.target.closest('[data-select-product]');
@@ -1404,6 +1785,18 @@ document.body.addEventListener('change', (e) => {
     saveState(); renderAll(); return;
   }
 
+  const dayIngredientInput = e.target.closest('[data-entry-ing-grams]');
+  if (dayIngredientInput) {
+    const day = state.days[state.activeDay];
+    const entry = day.entries.find((x) => x.id === dayIngredientInput.dataset.entryIngGrams);
+    const ing = entry?.dayIngredients?.find((x) => x.id === dayIngredientInput.dataset.ingId);
+    if (!entry || !ing) return;
+    ing.grams = Math.max(0, num(dayIngredientInput.value));
+    entry.customized = true;
+    recalcRecipeEntry(entry);
+    saveState(); renderAll(); return;
+  }
+
   const builderGrams = e.target.closest('[data-builder-ing-grams]');
   if (builderGrams) {
     const ing = builder.ingredients.find((x) => x.id === builderGrams.dataset.builderIngGrams);
@@ -1425,6 +1818,15 @@ document.getElementById('recipeTagFilter').addEventListener('change', renderReci
 document.getElementById('recipeDefaultPortion').addEventListener('input', renderRecipes);
 document.getElementById('builderProductSearch').addEventListener('input', renderBuilderProductResults);
 document.getElementById('recipeServings').addEventListener('input', renderRecipeBuilder);
+document.getElementById('offCountryMode').addEventListener('change', () => { updateOffSettingsFromForm(); remoteProducts = []; renderProductSearch(); });
+document.getElementById('offExcludeRussia').addEventListener('change', () => { updateOffSettingsFromForm(); remoteProducts = []; renderProductSearch(); });
+document.getElementById('offBlockWords').addEventListener('input', updateOffSettingsFromForm);
+document.getElementById('fillBulkProductsExampleBtn').addEventListener('click', () => { document.getElementById('bulkProductsInput').value = BULK_PRODUCTS_EXAMPLE; });
+document.getElementById('fillBulkRecipesExampleBtn').addEventListener('click', () => { document.getElementById('bulkRecipesInput').value = BULK_RECIPES_EXAMPLE; });
+document.getElementById('clearBulkProductsBtn').addEventListener('click', () => { document.getElementById('bulkProductsInput').value = ''; renderImportReport('bulkProductsReport', 'Очищено', ['Можно вставить новую таблицу продуктов.']); });
+document.getElementById('clearBulkRecipesBtn').addEventListener('click', () => { document.getElementById('bulkRecipesInput').value = ''; renderImportReport('bulkRecipesReport', 'Очищено', ['Можно вставить новую таблицу рецептов.']); });
+document.getElementById('importBulkProductsBtn').addEventListener('click', importBulkProducts);
+document.getElementById('importBulkRecipesBtn').addEventListener('click', importBulkRecipes);
 
 document.getElementById('manualProductForm').addEventListener('submit', (e) => {
   e.preventDefault();
