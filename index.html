@@ -209,6 +209,11 @@
   .result-sub, .product-sub, .recipe-sub { margin-top: 3px; color: var(--text2); font-size: 12px; line-height: 1.4; }
   .selected-product { border: 1px solid rgba(45,90,39,0.20); background: var(--accent-light); border-radius: 18px; padding: 13px; }
 
+  .randomizer-card { border: 1px solid rgba(45,90,39,0.18); background: linear-gradient(180deg, var(--accent-light), rgba(255,255,255,0.84)); border-radius: 18px; padding: 13px; display: grid; gap: 10px; }
+  .randomizer-card h3 { margin: 0 0 4px; font-size: 15px; letter-spacing: -0.01em; }
+  .randomizer-card .actions .btn { flex: 1 1 150px; }
+  .randomizer-report { background: #fff; }
+
   .recipe-card h3 { margin: 0 0 6px; }
   .recipe-card p { margin: 8px 0; }
   .recipe-controls { display: grid; gap: 8px; margin-top: 10px; }
@@ -313,6 +318,22 @@
               <p class="muted small">Продукт добавляется по граммам. Рецепт добавляется как порция: 0.5, 1, 1.5, 2 и т.д.</p>
             </div>
 
+
+            <div class="randomizer-card">
+              <div>
+                <h3>Рандомайзер дня</h3>
+                <p class="muted small">Подбирает рецепты под цели КБЖУ текущего дня и не удаляет то, что уже добавлено.</p>
+              </div>
+              <label class="check-pill"><input id="randomOnlyEmpty" type="checkbox" checked> не трогать заполненные приемы пищи</label>
+              <div class="hint tiny">Если в обеде уже есть хотя бы один продукт или рецепт, обед будет пропущен. Для полного подбора сначала очистите день.</div>
+              <div class="actions">
+                <button class="btn" id="randomizeDayBtn" type="button">Подобрать пустые приемы</button>
+                <button class="btn secondary" id="undoRandomizerBtn" type="button" disabled>Отменить подбор</button>
+              </div>
+              <div id="randomizerReport" class="import-report randomizer-report"><strong>Готов к подбору</strong><br>Заполнит только свободные приемы текущего дня.</div>
+            </div>
+
+            <hr style="border:0;border-top:1px solid var(--border);width:100%;">
             <div class="field">
               <label for="productSearch">Поиск продукта</label>
               <input id="productSearch" type="search" placeholder="творог 5%, тунец, банан, гречка">
@@ -610,6 +631,7 @@ const OFF_HIDDEN_BLOCK_WORD_CODES = [[114,117,115,115,105,97],[114,117,115,115,1
 const INTERNAL_OFF_BLOCK_WORDS = OFF_HIDDEN_BLOCK_WORD_CODES.map((letters) => String.fromCharCode(...letters));
 const OFF_PROXY_URL = ''; // Optional: paste a serverless proxy URL here if you move external product filtering to a backend.
 const MEAL_TYPES = ['Завтрак', 'Перекус', 'Обед', 'Ужин', 'Перекус 2'];
+const RANDOMIZER_BEAM_WIDTH = 160;
 const QUICK_TAGS = ['завтрак', 'обед', 'ужин', 'перекус', 'быстро', 'с собой', 'без готовки', 'курица', 'рыба', 'творог', 'крупы', 'овощи'];
 const fmt = (n) => Number.isInteger(Number(n)) ? String(Number(n)) : String(Math.round(Number(n) * 10) / 10).replace('.', ',');
 const num = (v) => Number(String(v || '').replace(',', '.')) || 0;
@@ -1057,12 +1079,14 @@ let state = loadState();
 let selectedProduct = null;
 let remoteProducts = [];
 let builder = { selectedProductId: null, ingredients: [], editingId: null };
+let lastRandomizer = { dayIndex: null, entryIds: [] };
 
 function renderAll() {
   renderGoalChips();
   renderMealSelects();
   renderDayNav();
   renderPlanner();
+  renderRandomizerControls();
   renderProductSearch();
   renderSelectedProductBox();
   renderProductLibrary();
@@ -1825,6 +1849,244 @@ async function syncOnlineSheets(options = {}) {
   }
 }
 
+
+function mealTagForRandomizer(type) {
+  const t = normalize(type).replace(/\d+/g, '').trim();
+  if (t.includes('перекус')) return 'перекус';
+  if (t.includes('завтрак')) return 'завтрак';
+  if (t.includes('обед')) return 'обед';
+  if (t.includes('ужин')) return 'ужин';
+  return t;
+}
+
+function recipeAllowedForRandomizer(r) {
+  if (!r || !Array.isArray(r.ingredients) || !r.ingredients.length) return false;
+  const m = recipeMacros(r);
+  return num(m.kcal) > 20;
+}
+
+function recipeMatchesMealForRandomizer(r, type) {
+  const mealTag = mealTagForRandomizer(type);
+  const tags = (r.tags || []).map(normalize);
+  const name = normalize(r.name);
+  if (!mealTag) return true;
+  if (mealTag === 'перекус') return tags.some((t) => t.includes('перекус')) || name.includes('перекус');
+  return tags.some((t) => t === mealTag || t.includes(mealTag)) || name.includes(mealTag);
+}
+
+function portionOptionsForMeal(type) {
+  const mealTag = mealTagForRandomizer(type);
+  if (mealTag === 'перекус') return [0.5, 0.75, 1, 1.25];
+  if (mealTag === 'завтрак') return [0.5, 0.75, 1, 1.25, 1.5];
+  return [0.5, 0.75, 1, 1.25, 1.5];
+}
+
+function macrosForRecipePortion(r, portion) {
+  const m = recipeMacros(r);
+  const n = Math.max(0.1, num(portion) || 1);
+  return {
+    kcal: Math.round(num(m.kcal) * n * 10) / 10,
+    p: Math.round(num(m.p) * n * 10) / 10,
+    c: Math.round(num(m.c) * n * 10) / 10,
+    f: Math.round(num(m.f) * n * 10) / 10
+  };
+}
+
+function macroAddCopy(a, b) {
+  return {
+    kcal: num(a.kcal) + num(b.kcal),
+    p: num(a.p) + num(b.p),
+    c: num(a.c) + num(b.c),
+    f: num(a.f) + num(b.f)
+  };
+}
+
+function randomizerScore(totals) {
+  const g = state.goals;
+  const kcalMin = num(g.kcalMin), kcalMax = num(g.kcalMax);
+  const kcalMid = (kcalMin + kcalMax) / 2 || kcalMax || kcalMin || 1800;
+  let score = 0;
+
+  if (totals.kcal < kcalMin) score += Math.pow((kcalMin - totals.kcal) / 110, 2) * 2.6;
+  else if (totals.kcal > kcalMax) score += Math.pow((totals.kcal - kcalMax) / 110, 2) * 4.2;
+  else score += Math.pow((totals.kcal - kcalMid) / 260, 2) * 0.25;
+
+  const macroRules = [
+    ['p', num(g.p), 22, 1.55, 0.80],
+    ['c', num(g.c), 36, 1.00, 0.90],
+    ['f', num(g.f), 14, 1.10, 1.85]
+  ];
+  macroRules.forEach(([key, target, scale, underWeight, overWeight]) => {
+    if (!target) return;
+    const diff = num(totals[key]) - target;
+    const weight = diff < 0 ? underWeight : overWeight;
+    score += Math.pow(Math.abs(diff) / scale, 2) * weight;
+  });
+  return score;
+}
+
+function randomizerExistingRecipeKeys(entries) {
+  const used = new Set();
+  (entries || []).forEach((e) => {
+    if (e.kind !== 'recipe') return;
+    if (e.sourceRecipeId) used.add('id:' + e.sourceRecipeId);
+    if (e.name) used.add('name:' + normalize(e.name));
+  });
+  return used;
+}
+
+function randomizerCandidatesForMeal(type, usedKeys = new Set()) {
+  const recipes = allRecipes().filter(recipeAllowedForRandomizer);
+  const exact = recipes.filter((r) => recipeMatchesMealForRandomizer(r, type));
+  const pool = exact.length ? exact : recipes;
+  const portions = portionOptionsForMeal(type);
+  const candidates = [];
+
+  pool.forEach((r) => {
+    const idKey = 'id:' + r.id;
+    const nameKey = 'name:' + normalize(r.name);
+    if (usedKeys.has(idKey) || usedKeys.has(nameKey)) return;
+    const exactMatch = recipeMatchesMealForRandomizer(r, type);
+    const sourceBonus = (r.source === 'custom' || r.source === 'sheet') ? -0.25 : 0;
+    const mealPenalty = exactMatch ? 0 : 5;
+    portions.forEach((portion) => {
+      const macros = macrosForRecipePortion(r, portion);
+      if (macros.kcal <= 20) return;
+      candidates.push({ recipe: r, portion, macros, penalty: mealPenalty + sourceBonus + Math.random() * 0.03 });
+    });
+  });
+
+  if (!candidates.length && pool.length) {
+    pool.forEach((r) => {
+      portions.forEach((portion) => {
+        const macros = macrosForRecipePortion(r, portion);
+        if (macros.kcal > 20) candidates.push({ recipe: r, portion, macros, penalty: 6 });
+      });
+    });
+  }
+
+  return candidates.sort((a, b) => a.penalty - b.penalty || Math.random() - 0.5).slice(0, 120);
+}
+
+function buildRandomizerPlan(day, options = {}) {
+  const onlyEmpty = options.onlyEmpty !== false;
+  const entries = day.entries || [];
+  const targetMeals = MEAL_TYPES.filter((type) => onlyEmpty ? !entries.some((e) => e.type === type) : true);
+  if (!targetMeals.length) {
+    return { error: 'Свободных приемов пищи нет. Если хотите собрать день с нуля, сначала очистите день.' };
+  }
+  if (!allRecipes().filter(recipeAllowedForRandomizer).length) {
+    return { error: 'В базе пока нет рецептов с рассчитанным КБЖУ. Добавьте рецепты или загрузите их из таблицы.' };
+  }
+
+  let beam = [{
+    totals: calcTotals(entries),
+    chosen: [],
+    used: randomizerExistingRecipeKeys(entries),
+    score: randomizerScore(calcTotals(entries)),
+    penalty: 0
+  }];
+
+  targetMeals.forEach((type) => {
+    const next = [];
+    beam.forEach((item) => {
+      const list = randomizerCandidatesForMeal(type, item.used);
+      list.forEach((candidate) => {
+        const used = new Set(item.used);
+        used.add('id:' + candidate.recipe.id);
+        used.add('name:' + normalize(candidate.recipe.name));
+        const totals = macroAddCopy(item.totals, candidate.macros);
+        const chosen = [...item.chosen, { type, ...candidate }];
+        const score = randomizerScore(totals) + item.penalty + candidate.penalty + Math.random() * 0.05;
+        next.push({ totals, chosen, used, score, penalty: item.penalty + candidate.penalty });
+      });
+    });
+    beam = next.sort((a, b) => a.score - b.score).slice(0, RANDOMIZER_BEAM_WIDTH);
+  });
+
+  if (!beam.length) return { error: 'Не получилось собрать вариант из текущих рецептов. Добавьте больше рецептов с тегами завтрак/обед/ужин/перекус.' };
+  const finalists = beam.sort((a, b) => a.score - b.score).slice(0, Math.min(6, beam.length));
+  return finalists[Math.floor(Math.random() * finalists.length)];
+}
+
+function randomizerTotalsLine(totals) {
+  return `Итог после подбора: ${fmt(totals.kcal)} ккал, Б ${fmt(totals.p)} г, У ${fmt(totals.c)} г, Ж ${fmt(totals.f)} г.`;
+}
+
+function randomizerStatusLines(totals) {
+  return [
+    `Калории: ${macroStatus('kcal', totals.kcal)}.`,
+    `Белки: ${macroStatus('p', totals.p)}.`,
+    `Углеводы: ${macroStatus('c', totals.c)}.`,
+    `Жиры: ${macroStatus('f', totals.f)}.`
+  ];
+}
+
+function renderRandomizerControls() {
+  const report = document.getElementById('randomizerReport');
+  const undoBtn = document.getElementById('undoRandomizerBtn');
+  if (undoBtn) undoBtn.disabled = !(lastRandomizer.dayIndex === state.activeDay && lastRandomizer.entryIds.length);
+  if (!report || !state.days?.length) return;
+  const day = state.days[state.activeDay];
+  const onlyEmpty = document.getElementById('randomOnlyEmpty')?.checked !== false;
+  const emptyTypes = MEAL_TYPES.filter((type) => !((day.entries || []).some((e) => e.type === type)));
+  const targetTypes = onlyEmpty ? emptyTypes : MEAL_TYPES;
+  const totals = calcTotals(day.entries || []);
+  const g = state.goals;
+  const kcalMid = (num(g.kcalMin) + num(g.kcalMax)) / 2;
+  const gap = `До ориентира: ${fmt(Math.max(0, kcalMid - totals.kcal))} ккал, Б ${fmt(Math.max(0, num(g.p) - totals.p))} г, У ${fmt(Math.max(0, num(g.c) - totals.c))} г, Ж ${fmt(Math.max(0, num(g.f) - totals.f))} г.`;
+  renderImportReport('randomizerReport', 'Рандомайзер готов', [
+    targetTypes.length ? `Будет подбирать для: ${targetTypes.join(', ')}.` : 'Свободных приемов пищи нет.',
+    gap,
+    'Уже заполненные блоки не удаляются.'
+  ]);
+}
+
+function randomizeActiveDay() {
+  const day = state.days[state.activeDay];
+  const onlyEmpty = document.getElementById('randomOnlyEmpty')?.checked !== false;
+  const plan = buildRandomizerPlan(day, { onlyEmpty });
+  if (plan.error) {
+    renderImportReport('randomizerReport', 'Рандомайзер', [plan.error], plan.errors || []);
+    toast('Подбор не выполнен');
+    return;
+  }
+
+  const addedEntries = plan.chosen.map((item) => makeEntryFromRecipe(
+    item.recipe,
+    item.type,
+    item.portion,
+    (item.recipe.source === 'custom' || item.recipe.source === 'sheet') ? 'рандомайзер · ваша база' : 'рандомайзер'
+  ));
+  day.entries.push(...addedEntries);
+  lastRandomizer = { dayIndex: state.activeDay, entryIds: addedEntries.map((x) => x.id) };
+  saveState();
+  renderAll();
+
+  const messages = addedEntries.map((e) => `${e.type}: ${e.name} · ${fmt(e.portion || 1)} порц. · ${fmt(e.kcal)} ккал`);
+  messages.push(randomizerTotalsLine(calcTotals(day.entries || [])));
+  messages.push(...randomizerStatusLines(calcTotals(day.entries || [])));
+  renderImportReport('randomizerReport', 'Подбор добавлен в день', messages);
+  toast(`Добавлено рецептов: ${addedEntries.length}`);
+}
+
+function undoLastRandomizer() {
+  if (lastRandomizer.dayIndex !== state.activeDay || !lastRandomizer.entryIds.length) {
+    toast('Нет подбора для отмены');
+    return;
+  }
+  const ids = new Set(lastRandomizer.entryIds);
+  const day = state.days[state.activeDay];
+  const before = day.entries.length;
+  day.entries = day.entries.filter((e) => !ids.has(e.id));
+  const removed = before - day.entries.length;
+  lastRandomizer = { dayIndex: null, entryIds: [] };
+  saveState();
+  renderAll();
+  renderImportReport('randomizerReport', 'Подбор отменен', [`Удалено позиций: ${removed}. Уже добавленные вручную продукты и рецепты не тронуты.`]);
+  toast('Последний подбор отменен');
+}
+
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.tab-panel').forEach((p) => p.classList.toggle('active', p.id === tab));
@@ -1967,6 +2229,9 @@ document.body.addEventListener('change', (e) => {
 document.getElementById('productSearch').addEventListener('input', () => { remoteProducts = []; renderProductSearch(); });
 document.getElementById('showAllProductsBtn').addEventListener('click', () => { document.getElementById('productSearch').value = ''; remoteProducts = []; renderProductSearch(); });
 document.getElementById('searchOffBtn').addEventListener('click', searchOpenFoodFacts);
+document.getElementById('randomizeDayBtn').addEventListener('click', randomizeActiveDay);
+document.getElementById('undoRandomizerBtn').addEventListener('click', undoLastRandomizer);
+document.getElementById('randomOnlyEmpty').addEventListener('change', renderRandomizerControls);
 document.getElementById('productLibrarySearch').addEventListener('input', renderProductLibrary);
 document.getElementById('quickRecipeSearch').addEventListener('input', renderRecipes);
 document.getElementById('recipeSearch').addEventListener('input', renderRecipes);
